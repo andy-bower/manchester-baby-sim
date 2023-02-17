@@ -27,6 +27,8 @@ class Assembler:
                 self.load_asm(file, store)
             case "snp":
                 self.load_snp(file, store)
+            case "logisim":
+                self.load_logisim(file, store)
             case _:
                 raise AssemblerError("File format not recognized")
 
@@ -189,6 +191,58 @@ class Assembler:
         for address, word in enumerate(store_tmp):
             store[address] = word
 
+    def load_logisim(self, file: Path, store: Store):
+        """Load logisim image file
+        """
+        store_tmp = Store(
+            word_length=store.word_length,
+            word_count=store.word_count
+        )
+
+        counter = 0
+        error = False
+
+        with open(file, "r") as file:
+            if file.readline().strip() != "v2.0 raw":
+                print(f"Logisim image file does not begin with suitable header\n")
+                error = True
+
+            for line in file:
+                # Cleaning
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Word
+                try:
+                    word = b(int(line, 16), 32)
+                except IndexError:
+                    print(line)
+                    print(f"Error: missing word\n")
+                    error = True
+
+                if len(word) != store.word_length:
+                    print(line)
+                    print(f"Error: word has a wrong length (got {len(word)}, expected {store.word_length}\n")
+                    error = True
+
+                try:
+                    store_tmp[counter] = word
+                except IndexError:
+                    print(line)
+                    print(f"Too many words for this machine (highest address is {store.word_count-1})\n")
+                    error = True
+
+                counter += 1
+
+        if error:
+            raise AssemblerError("Errors have been found in logisim image file")
+
+        # Finally, write the store
+        for address, word in enumerate(store_tmp):
+            store[address] = word
+
+
     def _guess_file_format(self, file: Path) -> str:
         """Open the file and try to guess its format from its content
 
@@ -209,6 +263,9 @@ class Assembler:
 
                 if re.match("^\d+ \w+( \d+)?$", line):
                     return "asm"
+
+                if re.match("^v2.0 raw$", line):
+                    return "logisim"
 
         return None
 
